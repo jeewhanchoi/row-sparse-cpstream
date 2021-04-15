@@ -1,0 +1,44 @@
+
+*.swp
+*.o
+
+# config-generated files
+include/splatt/types.h
+
+# compiled matlab files
+*.mex
+*.mexa64
+
+build/
+
+# tensors
+*.tns
+*.bin
+
+mode*.mat
+lambda.mat
+
+CMakeCache.txt
+Makefile
+CMakeFiles/
+cmake_install.cmake
+
+tags
+src/tags
+
+a.out
+
+doxygen/html
+doxygen/latex
+doxygen/*.log
+
+.vscode
+
+*.txt
+*.out
+*.err
+
+*.sv?
+*.sw?
+
+*.csv

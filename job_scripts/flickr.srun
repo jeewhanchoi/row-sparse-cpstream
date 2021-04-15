@@ -1,0 +1,16 @@
+#!/bin/bash
+#SBATCH --partition=fat         ### Partition (like a queue in PBS)
+#SBATCH --job-name=cc       ### Job Name
+#SBATCH --output=rsp_flickr.out     ### File in which to store job output
+#SBATCH --error=rsp_flickr.err      ### File in which to store job error messages
+#SBATCH --time=0-12:00:00       ### Wall clock time limit in Days-HH:MM:SS
+#SBATCH --nodes=1               ### Number of nodes needed for the job
+#SBATCH --mem=512G              ### Memory per CPU
+#SBATCH --ntasks-per-node=1     ### Number of tasks to be launched per Node
+#SBATCH --cpus-per-task=56      ### Number of threads per task (OMP threads)
+#SBATCH --account=hpctensor     ### Account used for job submission
+
+export KMP_AFFINITY=granularity=fine,compact,1
+export OMP_NUM_THREADS=56
+
+./build/Linux-x86_64/bin/splatt cpd -v --stream=4 -r 10 -t 56 --reg=frob,1e-2,4 ../hpctensor/flickr-4d.tns

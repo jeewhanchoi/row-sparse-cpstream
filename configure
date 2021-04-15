@@ -1,0 +1,371 @@
+#!/bin/bash
+
+# The MIT License (MIT)
+#
+# Copyright (c) 2014-2017, Dominique LaSalle and Shaden Smith
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+###############################################################################
+# CONFIG VARIABLES ############################################################
+###############################################################################
+
+NAME="splatt"
+
+###############################################################################
+# FUNCTIONS ###################################################################
+###############################################################################
+
+die() {
+  echo "ERROR: ${@}" 1>&2
+  exit 1
+}
+
+abspath() {
+  if [[ "${@::1}" == "/" ]]; then
+    echo "${@}"
+  else
+    echo "${PWD}/${@}"
+  fi
+}
+
+show_help() {
+  echo "USAGE: configure [options]"
+  echo ""
+
+  echo "COMPILATION OPTIONS"
+  echo "==================="
+
+  echo "  --download-cmake"
+  echo "    Download a CMake binary instead of searching \$PATH."
+
+  echo "  --build-dir=<dir>"
+  echo "    Set the build directory (default: ./build/<arch>/)."
+  echo "  --cc=<cc>"
+  echo "    Set the C compiler."
+  echo "  --cxx=<cxx>"
+  echo "    Set the C++ compiler."
+
+  echo ""
+  echo "  --max-modes=<#>"
+  echo "    Set the maxmimum number of tensor modes (default: 8)."
+
+  echo ""
+  echo "  --index-size={32,64}"
+  echo "    Use 32 or 64 bit integers (default: 64)."
+  echo "  --precision={single,double}"
+  echo "    Use single or double precision floating point values (default: double)."
+  echo ""
+
+  echo "  --intel"
+  echo "    Use the Intel compilers (icc, icpc), MKL, and possibly Intel-specific optimizations."
+  echo "  --debug"
+  echo "    Turn off optimizations and build with debugging symbols and assertions."
+  echo "  --dev"
+  echo "    Build in development mode. Warnings and extra logging enabled."
+
+  echo ""
+  echo "LIBRARY OPTIONS"
+  echo "==============="
+
+  # OpenMP
+  echo "OpenMP"
+  echo "  --no-openmp"
+  echo "    Disable OpenMP support (i.e., disable multi-threading)."
+  echo ""
+
+  # MPI
+  echo "MPI"
+  echo "  --with-mpi"
+  echo "    Build with MPI support. Let CMake auto-detect MPI environment."
+  echo "  --with-mpicc=<cc>"
+  echo "    Set the MPI C compiler. Other configuration options may be determined by CMake."
+  echo "  --with-mpicxx=<cxx>"
+  echo "    Set the MPI C++ compiler. Other configuration options may be determined by CMake."
+  echo ""
+
+  # BLAS/LAPACK
+  echo "BLAS/LAPACK"
+  echo "If you are unhappy with the auto-detected BLAS/LAPACK libraries:"
+  echo "  --with-blas-lib=<lib>"
+  echo "    Set the BLAS library (e.g., /usr/.../libblas.so)."
+  echo "  --with-lapack-lib=<lib>"
+  echo "    Set the LAPACK library (e.g., /usr/.../liblapack.so)."
+  echo "  --download-blas-lapack"
+  echo "    Download BLIS & reference LAPACK (requires git & gfortran)."
+  echo "  --with-fortran"
+  echo "    Link against a Fortran library. Some LAPACK libraries require."
+  echo "  --with-fortran-lib=<lib>"
+  echo "    Set the Fortran library (e.g., gfortran or ifort)."
+  echo "  --blas-int={32,64}"
+  echo "    Integer size for BLAS/LAPACK (default: 32). Matlab requires 64."
+  echo ""
+
+  # Metis
+  echo "Metis (developers only)"
+  echo "  --with-metis"
+  echo "    Build with Metis support. Let CMake auto-detect Metis environment."
+  echo "  --with-metis-lib=<lib>"
+  echo "    Set the Metis library (e.g., /usr/.../libmetis.a)."
+
+  echo ""
+  echo "INSTALLATION OPTIONS:"
+  echo "====================:"
+  echo "  --prefix=<prefix>"
+  echo "    Set the installation prefix."
+  echo "  --build-lib={static,shared}"
+  echo "    Set the type of library to build (default: static)."
+  echo ""
+
+  echo "Please report bugs to <shaden@cs.umn.edu>."
+  echo "SPLATT home page: <http://cs.umn.edu/~splatt/>."
+}
+
+
+###############################################################################
+# OPTION PARSING ##############################################################
+###############################################################################
+
+
+#CONFIG_FLAGS="-DCMAKE_VERBOSE_MAKEFILE=1"
+CONFIG_FLAGS=""
+
+
+# default values
+CMAKE="$(which cmake)"
+BUILDDIR="$(pwd)/build/$(uname -s)-$(uname -m)"
+DL_CMAKE=0
+
+
+#
+# parse arguments
+#
+for i in "${@}"; do
+  case "${i}" in
+    # help
+      -h|--help)
+      show_help
+      exit 0
+    ;;
+
+    ## COMPILE OPTIONS
+    # cc
+    --cc=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DCMAKE_C_COMPILER=${i#*=}"
+    ;;
+    # cxx
+    --cxx=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DCMAKE_CXX_COMPILER=${i#*=}"
+    ;;
+    --intel)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DINTEL_OPT=1"
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DCMAKE_C_COMPILER=icc"
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DCMAKE_CXX_COMPILER=icpc"
+    ;;
+
+    # debug
+    --debug)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DDEBUG=1"
+    ;;
+    # dev
+    --dev)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DDEV_MODE=1"
+    ;;
+    --build-dir=*)
+      BUILDDIR="${i#*=}"
+    ;;
+
+    --download-cmake)
+			DL_CMAKE=1;
+    ;;
+
+    --index-size=*)
+      IDX_WIDTH=${i#*=}
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_IDX_WIDTH=${IDX_WIDTH}"
+    ;;
+    --precision=*)
+      PRECISION=${i#*=}
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_VAL_WIDTH=${PRECISION}"
+    ;;
+    --blas-int=*)
+      INT_WIDTH=${i#*=}
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_BLAS_INT=${INT_WIDTH}"
+    ;;
+    --max-modes=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DMAX_MODES=${i#*=}"
+    ;;
+    --with-fortran)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_FORTRAN=TRUE"
+    ;;
+    --with-fortran-lib=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_FORTRAN_LIB=${i#*=}"
+    ;;
+
+
+    ## LIBRARY OPTIONS
+
+    # BLAS/LAPACK
+    --with-blas-dir=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_BLAS_DIR=${i#*=}"
+    ;;
+    --with-blas-lib=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_BLAS_LIB=${i#*=}"
+    ;;
+    --with-lapack-dir=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_LAPACK_DIR=${i#*=}"
+    ;;
+    --with-lapack-lib=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_LAPACK_LIB=${i#*=}"
+    ;;
+    --download-blas-lapack)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DDOWNLOAD_BLAS_LAPACK=TRUE"
+    ;;
+
+    # OpenMP support
+    --no-openmp)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DDISABLE_OPENMP=1"
+    ;;
+
+    # MPI support
+    --with-mpi)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_MPI=1"
+    ;;
+    --with-mpicc=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DMPICC=${i#*=}"
+    ;;
+    --with-mpicxx=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DMPICXX=${i#*=}"
+    ;;
+
+
+    # Metis
+    --with-metis)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_METIS=1"
+    ;;
+    --with-metis-lib=*)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSER_METIS_LIB=${i#*=}"
+    ;;
+
+
+    ## INSTALL OPTIONS
+    # prefix
+    --prefix=*)
+    CONFIG_FLAGS="${CONFIG_FLAGS} -DCMAKE_INSTALL_PREFIX=${i#*=}"
+    ;;
+    --build-lib=*)
+      LIBTYPE=${i#*=}
+      if [ "${LIBTYPE}" == "shared" ]; then
+        CONFIG_FLAGS="${CONFIG_FLAGS} -DBUILD_SHARED_LIBS=TRUE"
+      elif [ "${LIBTYPE}" == "static" ]; then
+        CONFIG_FLAGS="${CONFIG_FLAGS} -DBUILD_SHARED_LIBS=FALSE"
+      else
+        die "Unknown library type: ${LIBTYPE}. Choose between {static,shared}."
+      fi
+    ;;
+
+
+
+    # deprecated
+    --mpi)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_MPI=1"
+    ;;
+    --mtmetis)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_MTMETIS=1"
+    ;;
+    --patoh)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_PATOH=1"
+    ;;
+    --ashado)
+      CONFIG_FLAGS="${CONFIG_FLAGS} -DUSE_ASHADO=1"
+    ;;
+
+
+    # bad argument
+    *)
+    die "Unknown option '${i}'"
+    ;;
+  esac
+done
+
+
+
+
+###############################################################################
+# RUN CMAKE ###################################################################
+###############################################################################
+
+
+# clean out build directory if it exists
+if [[ -d "${BUILDDIR}" ]]; then
+  echo "Removing old build directory '${BUILDDIR}'..."
+  rm -rf "${BUILDDIR}"
+fi
+
+
+# create build directory
+mkdir -vp "${BUILDDIR}" || \
+    die "Failed to create build directory: '${BUILDDIR}'"
+
+
+# Download CMake if requested.
+if [[ ${DL_CMAKE} -eq 1 ]]; then
+	CMAKE="$(./scripts/download-cmake.sh ${BUILDDIR})"
+fi
+
+# Check if cmake exists
+if [[ ! -x "${CMAKE}" ]]; then
+  die "Could not find usable cmake: '${CMAKE}'. Try '--download-cmake'."
+else
+  echo "Found CMAKE: '${CMAKE}'"
+fi
+
+
+ROOTDIR="${PWD}"
+pushd "${BUILDDIR}"
+
+echo "Calling cmake with arguments '${CONFIG_FLAGS}'"
+"${CMAKE}" "${ROOTDIR}" ${CONFIG_FLAGS}
+if [[ "$?" != "0" ]]; then
+  echo "CMake failed with '$?'" 1>&2
+  exit $?
+fi
+
+popd
+
+# create proxy makefile
+(
+echo "#######################################################################"
+echo "# Makefile generated by '$0' at $(date)"
+echo "# Using flags:"
+for d in ${CONFIG_FLAGS}; do
+  echo "#	${d}"
+done
+echo "#######################################################################"
+echo ""
+echo "all clean install uninstall:"
+echo "	\$(MAKE) -C ${BUILDDIR} \$@"
+echo ""
+echo "distclean:"
+echo "	rm -rf ${BUILDDIR} Makefile"
+echo ""
+) > Makefile
+
+
+

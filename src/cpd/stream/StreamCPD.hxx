@@ -1,0 +1,89 @@
+#ifndef SPLATT_CPD_STREAM_STREAMCPD_HXX
+#define SPLATT_CPD_STREAM_STREAMCPD_HXX
+
+extern "C" {
+#include "../../base.h"
+#include "../../sptensor.h"
+#include "../cpd.h"
+}
+
+#include "../../stmttkrp.hpp"
+#include "ParserBase.hxx"
+#include "StreamMatrix.hxx"
+
+class StreamCPD
+{
+public:
+  StreamCPD(
+      ParserBase * source
+  );
+  ~StreamCPD();
+
+
+  splatt_kruskal *  compute(
+      splatt_idx_t const rank,
+      double const forget,
+      splatt_cpd_opts * const cpd_opts,
+      splatt_global_opts const * const global_opts);
+
+  splatt_kruskal *  compute_rowsparse(
+      splatt_idx_t const rank,
+      double const forget,
+      splatt_cpd_opts * const cpd_opts,
+      splatt_global_opts const * const global_opts);
+
+private:
+  void track_row(idx_t mode, idx_t orig_index, char * name);
+
+  /*
+   * methods
+   */
+  splatt_kruskal * get_kruskal();
+
+  splatt_kruskal * get_prev_kruskal(idx_t previous);
+
+  double compute_errorsq(idx_t num_previous);
+
+  double compute_cpd_errorsq(idx_t num_previous);
+  /*
+   * Grow factor matrices and update Gram matrices
+   */
+  void grow_mats(idx_t const * const new_dims);
+
+  /*
+   * Add the historical data to the MTTKRP output before ADMM. */
+  void add_historical(idx_t const mode);
+  void add_historical_rsp(idx_t const mode, const rsp_matrix_t * const rsp_mat);
+  rsp_matrix_t * update_nzr_for_factormatrix(
+    idx_t const mode,
+    rsp_matrix_t * rsp_mttkrp_res, 
+    matrix_t * Q, matrix_t * Phi);
+
+  /*
+   * vars
+   */
+  cpd_ws * _cpd_ws;
+
+  ParserBase  * _source;
+
+  StreamMatrix * _mttkrp_buf;
+  StreamMatrix * _stream_mats_new[MAX_NMODES];
+  StreamMatrix * _stream_mats_old[MAX_NMODES];
+  /* ADMM */
+  StreamMatrix * _stream_init;
+  StreamMatrix * _stream_auxil;
+  StreamMatrix * _stream_duals[MAX_NMODES];
+
+  /* Stores complete streaming matrix -- TODO toggle */
+  StreamMatrix * _global_time;
+
+  matrix_t * _old_gram;
+
+  matrix_t * _mat_ptrs[MAX_NMODES+1];
+
+  idx_t _nmodes;
+  idx_t _rank;
+  idx_t _stream_mode;
+};
+
+#endif

@@ -1,0 +1,12 @@
+/*!
+
+\page intro Overview of \splatt
+\tableofcontents
+
+<!-- ***************************************************************************** -->
+<!-- ***************************************************************************** -->
+
+The Surprisingly ParalleL spArse Tensor Toolkit (\splatt) is a software toolkit
+for factoring large, sparse tensors on multi-core and multi-node systems.
+
+*/
