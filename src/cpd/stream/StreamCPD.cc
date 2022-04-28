@@ -765,78 +765,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     val_t prev_delta = 0.;
     val_t _prev_delta = 0.;
 
-    /* Compute new time slice - TODO: Need to move outside of inner 
-       iteration loop */
-    _mat_ptrs[SPLATT_MAX_NMODES]->I = 1;
 
-    matrix_t * Phi = mat_zero(rank, rank);
-    /* Compute element-wise product for Q and Phi - Q is not symmetric */
-    mat_form_gram(c, Phi, _nmodes, _stream_mode);
-    // #if DOTIME
-    // timer_stop(&t_Q);
-    // #endif
-
-    /* Scratchpad method */
-    #if 1
-    timer_start(&t_mttkrp);
-    #endif
-    mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
-    // mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
-    // mttkrp_stream(batch, _mat_ptrs, stream_mode);
-    #if 1
-    timer_stop(&t_mttkrp);
-    #endif
-
-    #if DOTIME
-    timer_start(&t_admm);
-    #endif
-    memcpy(_mat_ptrs[_stream_mode]->vals, A_nz[_stream_mode]->mat->vals, 
-           sizeof(val_t) * rank);
-    closedform_solve(_mat_ptrs[_stream_mode], Phi, _cpd_ws);
-    // admm(_stream_mode, _mat_ptrs, colnorms, _cpd_ws, cpd_opts, global_opts);
-    #if DOTIME
-    timer_stop(&t_admm);
-    #endif
-
-    // #if DOTIME
-    // timer_start(&t_copy);
-    // #endif
-    /* Accumulate new time slice into temporal Gram matrix */
-    val_t       * const restrict ata_vals = _cpd_ws->aTa[stream_mode]->vals;
-    val_t const * const restrict new_slice = _mat_ptrs[stream_mode]->vals;
-    p_copy_upper_tri(_cpd_ws->aTa[stream_mode]);
-    /* save old Gram matrix and update h */
-    par_memcpy(_old_gram->vals, ata_vals, rank * rank * sizeof(*ata_vals));
-    par_memcpy(h[stream_mode]->vals, ata_vals, rank * rank * sizeof(val_t));
-    // #if DOTIME
-    // timer_stop(&t_copy);
-    // #endif
-
-    timer_start(&timers[TIMER_ATA]);
-    #if DOTIME
-    timer_start(&t_gram);
-    #endif
-    #pragma omp parallel for schedule(static) if(rank > 50)
-    for(idx_t i=0; i < rank; ++i) {
-      for(idx_t j=0; j < rank; ++j) {
-        ata_vals[j + (i*rank)] += new_slice[i] * new_slice[j];
-        c[stream_mode]->vals[j + (i*rank)] += new_slice[i] * new_slice[j];
-      }
-    }
-    #if DOTIME
-    timer_stop(&t_gram);
-    #endif
-    timer_stop(&timers[TIMER_ATA]);
-
-    /* Update A_nz version of stream mode as well 
-     * This is a discrepency between the actual implementation and the pseudo code
-     * In pseudo code, this is done out size of the convergence loop
-     * */
-    // #if DOTIME
-    // timer_start(&t_copy);
-    // #endif
-    memcpy(A_nz[stream_mode]->mat->vals, _mat_ptrs[stream_mode]->vals, 
-           sizeof(val_t) * rank * 1);
     // #if DOTIME
     // timer_stop(&t_copy);
     // #endif
@@ -855,6 +784,82 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
 #endif
       val_t delta = 0.;
       val_t _delta = 0.; // Used for cross examination
+
+
+      /* Compute new time slice - TODO: Need to move outside of inner 
+          iteration loop */
+      _mat_ptrs[SPLATT_MAX_NMODES]->I = 1;
+
+      matrix_t * Phi = mat_zero(rank, rank);
+      /* Compute element-wise product for Q and Phi - Q is not symmetric */
+      mat_form_gram(c, Phi, _nmodes, _stream_mode);
+      // #if DOTIME
+      // timer_stop(&t_Q);
+      // #endif
+
+      /* Scratchpad method */
+      #if 1
+      timer_start(&t_mttkrp);
+      #endif
+      mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
+      // mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
+      // mttkrp_stream(batch, _mat_ptrs, stream_mode);
+      #if 1
+      timer_stop(&t_mttkrp);
+      #endif
+
+      #if DOTIME
+      timer_start(&t_admm);
+      #endif
+      memcpy(_mat_ptrs[_stream_mode]->vals, A_nz[_stream_mode]->mat->vals, 
+              sizeof(val_t) * rank);
+      closedform_solve(_mat_ptrs[_stream_mode], Phi, _cpd_ws);
+      // admm(_stream_mode, _mat_ptrs, colnorms, _cpd_ws, cpd_opts, global_opts);
+      #if DOTIME
+      timer_stop(&t_admm);
+      #endif
+
+      // #if DOTIME
+      // timer_start(&t_copy);
+      // #endif
+      /* Accumulate new time slice into temporal Gram matrix */
+      val_t       * const restrict ata_vals = _cpd_ws->aTa[stream_mode]->vals;
+      val_t const * const restrict new_slice = _mat_ptrs[stream_mode]->vals;
+      p_copy_upper_tri(_cpd_ws->aTa[stream_mode]);
+      /* save old Gram matrix and update h */
+      par_memcpy(_old_gram->vals, ata_vals, rank * rank * sizeof(*ata_vals));
+      par_memcpy(h[stream_mode]->vals, ata_vals, rank * rank * sizeof(val_t));
+      // #if DOTIME
+      // timer_stop(&t_copy);
+      // #endif
+
+      timer_start(&timers[TIMER_ATA]);
+      #if DOTIME
+      timer_start(&t_gram);
+      #endif
+      #pragma omp parallel for schedule(static) if(rank > 50)
+      for(idx_t i=0; i < rank; ++i) {
+        for(idx_t j=0; j < rank; ++j) {
+          ata_vals[j + (i*rank)] += new_slice[i] * new_slice[j];
+          c[stream_mode]->vals[j + (i*rank)] += new_slice[i] * new_slice[j];
+        }
+      }
+      #if DOTIME
+      timer_stop(&t_gram);
+      #endif
+      timer_stop(&timers[TIMER_ATA]);
+
+      /* Update A_nz version of stream mode as well 
+        * This is a discrepency between the actual implementation and the pseudo code
+        * In pseudo code, this is done out size of the convergence loop
+        * */
+      // #if DOTIME
+      // timer_start(&t_copy);
+      // #endif
+      memcpy(A_nz[stream_mode]->mat->vals, _mat_ptrs[stream_mode]->vals, 
+              sizeof(val_t) * rank * 1);
+
+
 
       // timer_start(&t_four);
       /* Update remaining modes */
@@ -1363,8 +1368,11 @@ splatt_kruskal *  StreamCPD::compute(
     }
 
     val_t prev_delta = 0.;
+#if SKIP_TEST
+    for(idx_t outer=0; outer < FIXED_NUM_IT; ++outer) {
+#else
     for(idx_t outer=0; outer < cpd_opts->max_iterations; ++outer) {
-
+#endif
       val_t delta = 0.;
       /*
        * compute new time slice.
@@ -1452,15 +1460,18 @@ splatt_kruskal *  StreamCPD::compute(
 
       } /* foreach mode */
 
-      printf("it: %d delta: %e prev_delta: %e (%e diff)\n", it, delta, prev_delta, fabs(delta - prev_delta));
+      // printf("it: %d delta: %e prev_delta: %e (%e diff)\n", it, delta, prev_delta, fabs(delta - prev_delta));
 
       /* check convergence */
+#if SKIP_TEST
+#else      
       if(outer > 0 && fabs(delta - prev_delta) < cpd_opts->tolerance) {
         printf("it: %d: converged in: %lu\n", it, outer+1);
         prev_delta = 0.;
         break;
       }
       prev_delta = delta;
+#endif
     } /* foreach outer max iterations */
 
     /* incorporate forgetting factor */
