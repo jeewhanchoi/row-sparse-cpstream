@@ -33,7 +33,11 @@ extern "C" {
 #define CHECK_ERR_INTERVAL 1000
 #endif
 
+// #define DEBUG 1
 #define USE_RSP_MTTKRP
+
+#define SKIP_TEST 1
+#define FIXED_NUM_IT 10
 
 // Row-sparse mttkrp implementation
 #include "../../stmttkrp.hpp"
@@ -512,8 +516,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
   // Used for line 29
   matrix_t** c_prev = (matrix_t**) splatt_malloc(_nmodes * sizeof(matrix_t));
 
-  rsp_matrix_t** A_nz_prev = (rsp_matrix_t**) splatt_malloc(_nmodes * sizeof(rsp_matrix_t));
-  rsp_matrix_t** A_nz = (rsp_matrix_t**) splatt_malloc(_nmodes * sizeof(rsp_matrix_t));
+  rsp_matrix_t** A_nz_prev = (rsp_matrix_t**) splatt_malloc(_nmodes * sizeof(rsp_matrix_t*));
+  rsp_matrix_t** A_nz = (rsp_matrix_t**) splatt_malloc(_nmodes * sizeof(rsp_matrix_t*));
 
   /* Q * Phi^-1 is needed to update A_z[m] after convergence */
   matrix_t** Q_Phi_inv = (matrix_t**) splatt_malloc(_nmodes * sizeof(matrix_t));
@@ -734,7 +738,6 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         for (idx_t i = 0; i < rank * rank; i++) {
           c_z_prev[m]->vals[i] = c_prev[m]->vals[i] - c_nz_prev[m]->vals[i];
         }
-
       }
     }
 
@@ -844,7 +847,12 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     // timer_start(&t_two);
     /* Inner iteration - until convergence  */
     timer_start(&t_inner);
+
+#if SKIP_TEST
+    for(idx_t outer=0; outer < FIXED_NUM_IT; ++outer) {
+#else
     for(idx_t outer=0; outer < cpd_opts->max_iterations; ++outer) {
+#endif
       val_t delta = 0.;
       val_t _delta = 0.; // Used for cross examination
 
@@ -854,7 +862,6 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         if(m == stream_mode) {
           continue;
         }
-
 
         // ------------------------------------------------------------
         #if DOTIME
@@ -994,14 +1001,20 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
       _niter = outer + 1;
       // timer_stop(&t_four);
 
+      cpd_opts->tolerance = 1e-5;
+
+#if SKIP_TEST
+#else
       if(outer > 0 && fabs(_delta - _prev_delta) < cpd_opts->tolerance) {
-        // printf("it: %d: converged in: %lu\n", it, outer+1);
+        printf("it: %d: converged in: %lu\n", it, outer+1);
         prev_delta = 0.;
         _prev_delta = 0.;
         break;
       }
       prev_delta = delta;
       _prev_delta = _delta;
+#endif
+
     } /* foreach outer max iterations */
     timer_stop(&t_inner);
     niter += _niter;
