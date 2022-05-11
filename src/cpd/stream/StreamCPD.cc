@@ -439,6 +439,7 @@ void StreamCPD::add_historical(
             _mttkrp_buf->mat(), 1.0);
   timer_stop(&timers[TIMER_MATMUL]);
   mat_free(_historical);
+  mat_free(A_nz_prev_Q_ref);
 }
 
 
@@ -1074,6 +1075,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
           _stream_mats_new[m]->mat()->vals[ridx * rank + j] = prev_A_z_Q_Phi_inv->mat->vals[i * rank + j];
         }
       }
+      rspmat_free(A_z);
+      rspmat_free(prev_A_z_Q_Phi_inv);
     }
     timer_stop(&t_full);
 
@@ -1303,11 +1306,6 @@ splatt_kruskal *  StreamCPD::compute(
 
   /* only previous info -- just used for add_historical() */
   _old_gram = mat_zero(rank, rank);
-
-  // for debuging mttkrp, delete after
-  matrix_t* m2;
-  matrix_t* m3;
-  matrix_t* m_ref;
 
 #if use_csf == 1
   double * csf_opts = splatt_default_opts();
