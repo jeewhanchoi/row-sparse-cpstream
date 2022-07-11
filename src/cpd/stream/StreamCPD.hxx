@@ -39,6 +39,7 @@ private:
    * methods
    */
   splatt_kruskal * get_kruskal();
+  void print_kruskal();
 
   splatt_kruskal * get_prev_kruskal(idx_t previous);
 

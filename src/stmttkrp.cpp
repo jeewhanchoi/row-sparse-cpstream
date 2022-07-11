@@ -788,6 +788,114 @@ rsp_matrix_t* rsp_mttkrp_stream_rsp(
   return M;
 }
 
+void rsp_mttkrp_stream_rsp_streaming_mode(
+  sptensor_t * const tt, 
+  rsp_matrix_t ** rsp_mats,
+  const idx_t mode,
+  const idx_t stream_mode,
+  std::vector<size_t>& idx,
+  std::vector<std::vector<int>>& ridx,
+  std::vector<size_t>& buckets) 
+{
+  idx_t const I = tt->dims[mode];
+  idx_t const nfactors = rsp_mats[0]->J;
+
+  /* If never computed, normally shouldn't be called in 
+   * Hypersparse ALS because at the beginning of every time slice
+   * we compute for every mode */
+  if (idx.size() != tt->nnz) {
+    idxsort_hist(tt, mode, idx, buckets);
+  }
+
+  size_t* restrict const hist = buckets.data() + 1;
+  size_t num_bins = buckets.size() - 1;
+
+  /* allocate and initialize the row-sparse output matrix */
+  rsp_matrix_t* M = rsp_mats[stream_mode];
+
+  val_t * restrict const outmat = M->mat->vals;
+
+  // timer_fstart(&clear_output);
+  #pragma omp parallel for schedule(static)
+  for(idx_t x=0; x < num_bins * nfactors; ++x) {
+    outmat[x] = 0.;
+  }
+
+  #pragma omp parallel for schedule(static)
+  // Write row index for rsp matrix
+  for (idx_t i = 0; i < num_bins; ++i) {
+    M->rowind[i] = tt->ind[mode][idx[buckets[i]]];
+  }
+  
+  idx_t const nmodes = tt->nmodes;
+  val_t * mvals[MAX_NMODES];
+  for(idx_t m=0; m < nmodes; ++m) {
+    mvals[m] = rsp_mats[m]->mat->vals;
+  }
+  val_t const * const restrict vals = tt->vals;
+
+  #pragma omp parallel
+  {
+    int nthreads = omp_get_num_threads();
+    int tid = omp_get_thread_num();
+
+    val_t * restrict accum = (val_t*)splatt_malloc(nfactors * sizeof(val_t));
+    val_t * restrict row_accum = (val_t*)splatt_malloc(nfactors * sizeof(val_t));
+
+    /* stream through buckets of nnz */
+    #pragma omp for schedule(static,1)
+    for(idx_t hi = 0; hi < num_bins; ++hi) {
+      idx_t start = hi == 0 ? 0 : hist[hi-1];
+      idx_t end = hist[hi];
+      if (start == end)
+        continue;
+      memset(row_accum, 0, nfactors*sizeof(val_t));
+
+      idx_t oidx = hi;
+      for (idx_t i = start; i < end; ++i) {
+        /* initialize with value */
+        for(idx_t f=0; f < nfactors; ++f) {
+          accum[f] = vals[idx[i]];
+        }
+
+        for(idx_t m=0; m < nmodes; ++m) {
+          if(m == mode) {
+            continue;
+          }
+          idx_t m_idx;
+
+          // Given the 'raw' index of the nonzero we need 
+          // to find the corresponding rowind from A_nz[m]
+          // FYI tt->ind[m] is the array that contains the indices of non zeros in m-th mode
+          if (m == stream_mode) m_idx = 0; // Because time-mode has only one row
+          else {
+            m_idx = ridx[m][tt->ind[m][idx[i]]];
+          }
+
+          val_t const * const restrict inrow = mvals[m] + (m_idx * nfactors);
+          for(idx_t f=0; f < nfactors; ++f) {
+            accum[f] *= inrow[f];
+          }
+        }
+
+        for (idx_t f=0; f < nfactors; ++f) {
+          row_accum[f] += accum[f];
+        }
+      }
+
+      val_t * const restrict outrow = outmat + (oidx * nfactors);
+      for (idx_t f = 0; f < nfactors; ++f) {
+        outrow[f] = row_accum[f];
+      }
+    }
+
+    splatt_free(accum);
+    splatt_free(row_accum);
+  } /* end omp parallel */
+  // return M;
+}
+
+
 /*
   std::vector<size_t> idx;
   std::vector<size_t> buckets;

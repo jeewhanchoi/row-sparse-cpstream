@@ -7,7 +7,8 @@ void print_matrix_(
     for (idx_t i = 0; i < A->I; i++) {
         fprintf(stderr, "[");
         for (idx_t j = 0; j < A->J; j++) {
-            fprintf(stderr, "%e", A->vals[A->J * i+ j]);
+            fprintf(stderr, "%.4f", A->vals[A->J * i+ j]);
+            // fprintf(stderr, "%.12f", A->vals[A->J * i+ j]);            
             if (j+1 < A->J) fprintf(stderr, ",");
 	    else {
 	        fprintf(stderr, "],");

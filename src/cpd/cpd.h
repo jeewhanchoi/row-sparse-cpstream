@@ -16,6 +16,7 @@
 #include "../matrix.h"
 #include "../sptensor.h"
 #include "../thd_info.h"
+#include "../splatt_debug.h"
 
 
 

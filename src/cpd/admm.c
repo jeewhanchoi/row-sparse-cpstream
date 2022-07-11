@@ -235,7 +235,6 @@ static void p_constraint_closedform(
   mat_solve_cholesky(ws->gram, primal);
 }
 
-
 static idx_t p_admm_iterate_chunk(
     matrix_t * primal,
     matrix_t * auxil,
@@ -253,7 +252,9 @@ static idx_t p_admm_iterate_chunk(
 {
   idx_t const rank = primal->J;
 
+  printf("before cholesky, rho: %f\n", rho);
   bool is_spd = mat_cholesky_(ws->gram);
+  printf("after cholesky\n");
 
   /* for checking convergence */
   val_t primal_norm     = 0.;
@@ -592,7 +593,7 @@ void closedform_solve(
 
   /* Copy and then solve directly against MTTKRP */
   size_t const bytes = primal->I * primal->J * sizeof(*primal->vals);
-  par_memcpy(primal->vals, ws->mttkrp_buf->vals, bytes);
+  // par_memcpy(primal->vals, ws->mttkrp_buf->vals, bytes);
   mat_solve_cholesky(gram, primal);
 }
 
@@ -608,7 +609,12 @@ val_t admm_(
   splatt_cpd_constraint * con = cpd_opts->constraints[mode];
   /* (A^T * A) .* (B^T * B) .* .... ) */
   mat_form_gram(ws->aTa, ws->gram, ws->nmodes, mode);
-  
+
+  for (int i = 0; i < ws->gram->I; ++i) {
+    ws->gram->vals[i * rank + i] += 1e-12;
+  }
+
+  // print_matrix("Phi", ws->gram);
   if(con->gram_func != NULL) {
     con->gram_func(ws->gram->vals, rank, con->data);
   }
@@ -618,17 +624,19 @@ val_t admm_(
 
     /* Absorb columns into column_weights if no constraints are applied */
     if(ws->unconstrained) {
+      printf("Normalized!\n");
       mat_normalize(mats[mode], column_weights);
     }
     return 0.;
   }
+  // printf("Proper admm\n");
   /* Add penalty to diagonal -- value taken from AO-ADMM paper */
   val_t const rho = mat_trace(ws->gram) / (val_t) rank;
   mat_add_diag(ws->gram, rho);
 
   /* Compute Cholesky factorization to use for forward/backward solves each
    * ADMM iteration */
-  // mat_cholesky(ws->gram);
+  mat_cholesky(ws->gram);
 
   /* Compute number of chunks */
   idx_t num_chunks = 1;

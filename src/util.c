@@ -34,6 +34,8 @@ void fill_rand(
   val_t * const restrict vals,
   idx_t const nelems)
 {
+  srand(time(NULL));
+  // srand(44); // just for debugging purposes only
   for(idx_t i=0; i < nelems; ++i) {
     vals[i] = rand_val();
   }

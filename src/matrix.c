@@ -233,10 +233,6 @@ void mat_cholesky(
   /* check dimensions */
   assert(A->I == A->J);
 
-  for (int i = 0; i < A->I; ++i) {
-    A->vals[i * A->I + i] += 1e-2;
-  }
-
   /* Cholesky factorization */
   splatt_blas_int N = A->I;
   val_t * const restrict neqs = A->vals;
