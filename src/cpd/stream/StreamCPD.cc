@@ -36,8 +36,8 @@ extern "C" {
 // #define DEBUG 1
 #define USE_RSP_MTTKRP
 
-// #define SKIP_TEST 1
-// #define FIXED_NUM_IT 10
+#define SKIP_TEST 1
+#define FIXED_NUM_IT 100
 
 // Row-sparse mttkrp implementation
 #include "../../stmttkrp.hpp"
@@ -936,6 +936,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         rsp_matrix_t * A_nz_prev_Q = rsp_mat_mul(A_nz_prev[m], Q);
 
         rsp_mat_add(rsp_mat, A_nz_prev_Q);
+        rspmat_free(A_nz_prev_Q);
+
         #if 1
         timer_stop(&t_hist);
         #endif
