@@ -227,12 +227,14 @@ static void p_constraint_closedform(
     con->clsd_func(primal->vals, nrows, ncols, con->data);
   }
 
-  mat_cholesky(ws->gram);
+  bool is_spd = mat_cholesky_(ws->gram);
 
   /* Copy and then solve directly against MTTKRP */
   size_t const bytes = primal->I * primal->J * sizeof(*primal->vals);
   par_memcpy(primal->vals, ws->mttkrp_buf->vals, bytes);
-  mat_solve_cholesky(ws->gram, primal);
+  // mat_solve_cholesky(ws->gram, primal);
+  mat_solve_cholesky_with_fallback(ws->gram, primal, is_spd);
+
 }
 
 static idx_t p_admm_iterate_chunk(
@@ -621,15 +623,12 @@ val_t admm_(
   /* these can be solved optimally without ADMM iterations */ 
   if(con->solve_type == SPLATT_CON_CLOSEDFORM) {
     p_constraint_closedform(mats[mode], ws, con);
-
     /* Absorb columns into column_weights if no constraints are applied */
     if(ws->unconstrained) {
-      printf("Normalized!\n");
       mat_normalize(mats[mode], column_weights);
     }
     return 0.;
   }
-  // printf("Proper admm\n");
   /* Add penalty to diagonal -- value taken from AO-ADMM paper */
   val_t const rho = mat_trace(ws->gram) / (val_t) rank;
   mat_add_diag(ws->gram, rho);

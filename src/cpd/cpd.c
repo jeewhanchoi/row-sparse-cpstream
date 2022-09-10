@@ -633,16 +633,16 @@ double cpd_error(
     splatt_free(accumF);
   } /* end omp parallel -- reduce myinner */
 
-  printf("lambda\n");
-  for (int i = 0; i < rank; ++i) {
-    printf("%f\n", factored->lambda[i]);
-  }
+  // printf("lambda\n");
+  // for (int i = 0; i < rank; ++i) {
+  //   printf("%f\n", factored->lambda[i]);
+  // }
 
   double const Xnormsq = tt_normsq(tensor);
   double const Znormsq = kruskal_norm(factored);
   double const residual = sqrt(Xnormsq + Znormsq - (2 * inner));
   double const err = residual / sqrt(Xnormsq);
-  printf("Xnormsq: %e Znormsq: %e inner: %e\n", Xnormsq, Znormsq, inner);
+  // printf("Xnormsq: %e Znormsq: %e inner: %e\n", Xnormsq, Znormsq, inner);
 
 #if 0
   printf("\n");

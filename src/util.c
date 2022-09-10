@@ -34,8 +34,8 @@ void fill_rand(
   val_t * const restrict vals,
   idx_t const nelems)
 {
-  srand(time(NULL));
-  // srand(44); // just for debugging purposes only
+  // srand(time(NULL));
+  // srand(45); // just for debugging purposes only
   for(idx_t i=0; i < nelems; ++i) {
     vals[i] = rand_val();
   }
@@ -56,8 +56,6 @@ char * bytes_str(
   sprintf(ret, "%0.2f%s", size, suffix[suff]);
   return ret;
 }
-
-
 
 idx_t argmax_elem(
   idx_t const * const arr,

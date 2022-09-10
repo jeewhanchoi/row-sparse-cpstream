@@ -345,7 +345,7 @@ static void default_cpd_opts(
   args->nfactors  = 10;
 
   args->stream_mode = SPLATT_MAX_NMODES;
-  args->forget = 0.95;
+  args->forget = 0.99;
   args->rsp_mode = false;
 }
 

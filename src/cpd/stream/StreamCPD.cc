@@ -30,14 +30,14 @@ extern "C" {
 
 /* How often to check global factorization error. This is expensive! */
 #ifndef CHECK_ERR_INTERVAL
-#define CHECK_ERR_INTERVAL 1000
+#define CHECK_ERR_INTERVAL 10
 #endif
 
 // #define DEBUG 1
 #define USE_RSP_MTTKRP
 
-#define SKIP_TEST 1
-#define FIXED_NUM_IT 100
+// #define SKIP_TEST 1
+// #define FIXED_NUM_IT 20
 
 // Row-sparse mttkrp implementation
 #include "../../stmttkrp.hpp"
@@ -93,7 +93,7 @@ static void mataTa_idx_based(
 {
   assert(dest->I == dest->J);
   size_t _size = dest->I;
-  #pragma omp parallel for schedule(static) 
+  #pragma omp parallel for schedule(static)
   for (idx_t i = 0; i < _size; i ++) {
     for (idx_t j = 0; j < _size; j ++) {
       val_t tmp = 0.0;
@@ -212,10 +212,9 @@ void StreamCPD::print_kruskal()
     } else {
       printf("%d\n", m);
       print_matrix("factor matrix", _stream_mats_new[m]->mat());
-    }    
+    }
   }
 }
-
 
 splatt_kruskal * StreamCPD::get_prev_kruskal(idx_t previous)
 {
@@ -321,10 +320,10 @@ inline void my_matmul(
 
 
 // Implementation of add_historical where
-// we accept a row_sparse mttkrp result 
+// we accept a row_sparse mttkrp result
 // instead of a full sized factor matrix
 void StreamCPD::add_historical_rsp(
-    idx_t const mode, 
+    idx_t const mode,
     const rsp_matrix_t * const rsp_mat)
 {
   matrix_t * ata_buf = _cpd_ws->aTa_buf;
@@ -372,7 +371,7 @@ void StreamCPD::add_historical_rsp(
   mttkrp_tmp->vals = (val_t*) splatt_malloc(mttkrp_tmp->I * mttkrp_tmp->J * sizeof(val_t));
 
   // A_prev * Q
-  my_matmul(_stream_mats_old[mode]->mat(), false, ata_buf, false, mttkrp_tmp); 
+  my_matmul(_stream_mats_old[mode]->mat(), false, ata_buf, false, mttkrp_tmp);
 
   // Add updated rows to mttkrp_tmp->vals
   idx_t const num_rows = rsp_mat->nnzr;
@@ -436,7 +435,7 @@ void StreamCPD::add_historical(
   }
 
   matrix_t * A_nz_prev_Q_ref = mat_alloc(_mttkrp_buf->mat()->I, _mttkrp_buf->mat()->J);
-  my_matmul(_stream_mats_old[mode]->mat(), false, ata_buf, false, A_nz_prev_Q_ref, 0.0); 
+  my_matmul(_stream_mats_old[mode]->mat(), false, ata_buf, false, A_nz_prev_Q_ref, 0.0);
 
   /*
   print_matrix("Q ref", ata_buf);
@@ -476,7 +475,7 @@ inline val_t admm(
     cpd_ws * const ws,
     splatt_cpd_opts const * const cpd_opts,
     splatt_global_opts const * const global_opts)
-{ 
+{
 #ifdef ADMM_FUSION
   splatt_cpd_constraint *con = cpd_opts->constraints[mode];
   if (strcmp(con->description, "MAX-COL-NORM") == 0) {
@@ -516,7 +515,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
 
   /* Hypersparse ALS */
   matrix_t** c_nz_prev = (matrix_t**) splatt_malloc(_nmodes * sizeof(matrix_t));
-  matrix_t** c_z_prev = (matrix_t**) splatt_malloc(_nmodes * sizeof(matrix_t)); 
+  matrix_t** c_z_prev = (matrix_t**) splatt_malloc(_nmodes * sizeof(matrix_t));
 
   matrix_t** c_nz = (matrix_t**) splatt_malloc(_nmodes * sizeof(matrix_t));
   matrix_t** c_z = (matrix_t**) splatt_malloc(_nmodes * sizeof(matrix_t));
@@ -602,7 +601,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
   sp_timer_t t_pre;
   sp_timer_t t_inner;
   sp_timer_t t_post;
-  
+
   sp_timer_t t_admm;
   sp_timer_t t_mttkrp;
   sp_timer_t t_hist;
@@ -673,40 +672,38 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     /**
      * For each time slice tensor batch,
      * we cache the intermediate results used for hypersparse ALS
-     * 
+     *
      * idx, buckets: used for rsp_mttkrp
      * nz_rows: corresponding non-zeros rows in factor matrix
      */
-    std::vector<std::vector<size_t>> nz_rows((size_t)num_modes, 
+    std::vector<std::vector<size_t>> nz_rows((size_t)num_modes,
                                              std::vector<size_t> (0, 0));
-    std::vector<std::vector<size_t>> buckets((size_t)num_modes, 
+    std::vector<std::vector<size_t>> buckets((size_t)num_modes,
                                              std::vector<size_t> (0, 0));
-    std::vector<std::vector<size_t>> idx((size_t)num_modes, 
+    std::vector<std::vector<size_t>> idx((size_t)num_modes,
                                          std::vector<size_t> (0, 0));
     // For storing mappings of indices in I to indices in rowind
-    // Without this we had to traverse through all rowind to find the 
+    // Without this we had to traverse through all rowind to find the
     // matching index
-    std::vector<std::vector<int>> ridx((size_t)num_modes, 
+    std::vector<std::vector<int>> ridx((size_t)num_modes,
                                        std::vector<int> (0, 0));
     #if DOTIME
     timer_stop(&t_vec);
     #endif
 
-    // Normalize factor matrices
-    for (int m = 0; m < num_modes; ++m) {
-        if (m == stream_mode) continue;
-        mat_normalize(_stream_mats_new[m]->mat(), colnorms);
-    }
-    if (it == 0) {
-        #pragma omp simd
-        for (int r = 0; r < rank; ++r) {
-            // Just normalize the columns and reset the lambda
-            colnorms[r] = 1.0;
+    if(it == 0) {
+      val_t * tmp = (val_t *) splatt_malloc(_rank * sizeof(*tmp));
+      for(idx_t m=0; m < num_modes; ++m) {
+        if(m == stream_mode) {
+          continue;
         }
+        mat_normalize(_mat_ptrs[m], tmp);
+      }
+      splatt_free(tmp);
     }
 
-    // TODO: For every batch, compute the non zeros rows once and use it 
-    // throughout 
+    // TODO: For every batch, compute the non zeros rows once and use it
+    // throughout
     /* Compute non zero rows for each (batch, m) */
 
     #if DOTIME
@@ -721,11 +718,11 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
       /* Reuse throughout current time slice */
       size_t nnzr = nz_rows[m].size();
       idx_t * rowind = &nz_rows[m][0];
-      A_nz_prev[m] = convert_to_rspmat(_stream_mats_old[m]->mat(), nnzr, 
+      A_nz_prev[m] = convert_to_rspmat(_stream_mats_old[m]->mat(), nnzr,
                                        rowind);
-      /* Before each inner iteration, c and h are updated accordingly using 
+      /* Before each inner iteration, c and h are updated accordingly using
          full factor matrix */
-      my_matmul(_stream_mats_old[m]->mat(), true, _stream_mats_new[m]->mat(), 
+      my_matmul(_stream_mats_old[m]->mat(), true, _stream_mats_new[m]->mat(),
                 false, h[m]);
 
       mat_aTa(_stream_mats_new[m]->mat(), c[m]);
@@ -760,8 +757,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
       }
       else {
         A_nz[m] = convert_to_rspmat(
-            _mat_ptrs[m], 
-            nz_rows[m].size(), 
+            _mat_ptrs[m],
+            nz_rows[m].size(),
             &nz_rows[m][0]);
       }
     }
@@ -784,7 +781,19 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     // timer_stop(&t_one);
     timer_stop(&t_pre);
 
-    /* Compute new time slice - TODO: Need to move outside of inner 
+    // timer_start(&t_two);
+    /* Inner iteration - until convergence  */
+    timer_start(&t_inner);
+
+#if SKIP_TEST == 1
+    for(idx_t outer=0; outer < FIXED_NUM_IT; ++outer) {
+#else
+    for(idx_t outer=0; outer < cpd_opts->max_iterations; ++outer) {
+#endif
+      val_t delta = 0.;
+      val_t _delta = 0.; // Used for cross examination
+
+    /* Compute new time slice - TODO: Need to move outside of inner
         iteration loop */
     _mat_ptrs[SPLATT_MAX_NMODES]->I = 1;
 
@@ -801,8 +810,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     // mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
     // mttkrp_stream(batch, _mat_ptrs, stream_mode);
     // A_nz[_stream_mode] = rsp_mttkrp_stream_rsp(batch, A_nz)
-    rsp_mttkrp_stream_rsp_streaming_mode(batch, A_nz, stream_mode, 
-                          stream_mode, idx[stream_mode], 
+    rsp_mttkrp_stream_rsp_streaming_mode(batch, A_nz, stream_mode,
+                          stream_mode, idx[stream_mode],
                           ridx, buckets[stream_mode]);
 
     #if 1
@@ -812,9 +821,9 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     #if DOTIME
     timer_start(&t_admm);
     #endif
-    memcpy(_mat_ptrs[_stream_mode]->vals, A_nz[_stream_mode]->mat->vals, 
+    memcpy(_mat_ptrs[_stream_mode]->vals, A_nz[_stream_mode]->mat->vals,
             sizeof(val_t) * rank);
-    
+
     // closedform_solve(_mat_ptrs[_stream_mode], Phi, _cpd_ws);
     closedform_solve(A_nz[_stream_mode]->mat, Phi, _cpd_ws);
     // print_matrix("streaming mode", _mat_ptrs[_stream_mode]);
@@ -831,7 +840,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     /* Accumulate new time slice into temporal Gram matrix */
     val_t       * const restrict ata_vals = _cpd_ws->aTa[stream_mode]->vals;
     // val_t const * const restrict new_slice = _mat_ptrs[stream_mode]->vals;
-    val_t const * const restrict new_slice = A_nz[stream_mode]->mat->vals;    
+    val_t const * const restrict new_slice = A_nz[stream_mode]->mat->vals;
     p_copy_upper_tri(_cpd_ws->aTa[stream_mode]);
     /* save old Gram matrix and update h */
     par_memcpy(_old_gram->vals, ata_vals, rank * rank * sizeof(*ata_vals));
@@ -856,7 +865,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     #endif
     timer_stop(&timers[TIMER_ATA]);
 
-    /* Update A_nz version of stream mode as well 
+    /* Update A_nz version of stream mode as well
       * This is a discrepency between the actual implementation and the pseudo code
       * In pseudo code, this is done out size of the convergence loop
       * */
@@ -865,22 +874,9 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     // #endif
 
     memcpy(
-      _mat_ptrs[stream_mode]->vals, 
+      _mat_ptrs[stream_mode]->vals,
       A_nz[stream_mode]->mat->vals,
       sizeof(val_t) * rank);
-
-    // timer_start(&t_two);
-    /* Inner iteration - until convergence  */
-    timer_start(&t_inner);
-
-#if SKIP_TEST == 1
-    for(idx_t outer=0; outer < FIXED_NUM_IT; ++outer) {
-#else
-    for(idx_t outer=0; outer < cpd_opts->max_iterations; ++outer) {
-#endif
-      val_t delta = 0.;
-      val_t _delta = 0.; // Used for cross examination
-
 
       // timer_start(&t_four);
       /* Update remaining modes */
@@ -898,7 +894,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
 
         /* Compute element-wise product for Q and Phi - Q is not symmetric, therefore the full version */
         mat_form_gram(c, Phi, _nmodes, m);
-        // Add frob reg so that it can be used throughout 
+        // Add frob reg so that it can be used throughout
         mat_add_diag(Phi, 1e-12);
 
         mat_form_gram_full(h, Q, _nmodes, m);
@@ -914,8 +910,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         timer_start(&t_mttkrp);
         #endif
         // Provide rsp_mttkrp with additional parameters: ridx, stream_mode
-        rsp_matrix_t * rsp_mat = rsp_mttkrp_stream_rsp(batch, A_nz, m, 
-                                                       stream_mode, idx[m], 
+        rsp_matrix_t * rsp_mat = rsp_mttkrp_stream_rsp(batch, A_nz, m,
+                                                       stream_mode, idx[m],
                                                        ridx, buckets[m]);
         #if 1
         timer_stop(&t_mttkrp);
@@ -1030,13 +1026,11 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
 
 
       } /* foreach mode */
-      
+
       printf("it: %d delta: %e prev_delta: %e (%e diff)\n", it, _delta, _prev_delta, fabs(_delta - _prev_delta));
-      
+
       _niter = outer + 1;
       // timer_stop(&t_four);
-
-      cpd_opts->tolerance = 1e-3;
 
 #if SKIP_TEST == 1
 #else
@@ -1073,8 +1067,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         idx_t ridx = rowind[i];
         /*
         par_memcpy(
-            &_stream_mats_new[m]->mat()->vals[ridx * rank], 
-            &A_nz[m]->mat->vals[i * rank], 
+            &_stream_mats_new[m]->mat()->vals[ridx * rank],
+            &A_nz[m]->mat->vals[i * rank],
             sizeof(val_t) * rank);
         */
         for (idx_t j = 0; j < J; j++) {
@@ -1086,7 +1080,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
       std::vector<size_t> z_rows = zero_slices(batch->dims[m], nz_rows[m]);
       idx_t nzr = z_rows.size();
 
-      rsp_matrix_t * A_z = convert_to_rspmat(_stream_mats_old[m]->mat(), nzr, &z_rows[0]); 
+      rsp_matrix_t * A_z = convert_to_rspmat(_stream_mats_old[m]->mat(), nzr, &z_rows[0]);
       rsp_matrix_t * prev_A_z_Q_Phi_inv = rspmat_alloc(A_z->I, A_z->J, A_z->nnzr);
       // We need Q_Phi_inv
       prev_A_z_Q_Phi_inv = rsp_mat_mul(A_z, Q_Phi_inv[m]);
@@ -1096,8 +1090,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         idx_t ridx = z_rows.at(i);
         /*
         par_memcpy(
-            &_stream_mats_new[m]->mat()->vals[ridx * rank], 
-            &prev_A_z_Q_Phi_inv->mat->vals[i * rank], 
+            &_stream_mats_new[m]->mat()->vals[ridx * rank],
+            &prev_A_z_Q_Phi_inv->mat->vals[i * rank],
             sizeof(val_t) * rank);
         */
         for (idx_t j=0; j < rank; j++) {
@@ -1168,14 +1162,14 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     // timer_stop(&batch_time);
     ++it;
 
-    /*
+
     double local_err   = compute_errorsq(1);
     double global_err  = -1.;
     double local10_err = -1.;
     double cpd_err     = -1.;
     if((it > 0) && ((it % CHECK_ERR_INTERVAL == 0) || _source->last_batch())) {
       global_err  = compute_errorsq(it);
-      local10_err = compute_errorsq(10);
+      // local10_err = compute_errorsq(10);
       cpd_err     = compute_cpd_errorsq(it);
       if(isnan(cpd_err)) {
         cpd_err = -1.;
@@ -1184,10 +1178,12 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
 
     printf("batch %5lu: %7lu nnz (%0.5fs) (%0.3e NNZ/s) "
            "cpd: %+0.5f global: %+0.5f local-1: %+0.5f local-10: %+0.5f\n",
-        it, batch->nnz, batch_time.seconds,
-        (double) batch->nnz / batch_time.seconds,
+        it, batch->nnz, 1.0,
+        (double) batch->nnz / 1.0,
         cpd_err, global_err, local_err, local10_err);
-     */
+
+    // if (it > 500) break;
+
 
     /* prepare for next batch */
     // timer_start(&t_clean);
@@ -1255,10 +1251,13 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
 
   /* compute quality assessment */
   splatt_kruskal * cpd = get_kruskal();
-  print_kruskal();
+  for (idx_t r = 0; r < rank; ++r) {
+    printf("%f\n", colnorms[r]);
+  }
+  // print_kruskal();
   double const final_err = cpd_error(_source->full_stream(), cpd);
   printf("\n");
-  printf("final-err: %0.5f\n",  final_err);
+  printf("final-err: %0.5f\n",  final_err * final_err);
 
   mat_free(_old_gram);
 
@@ -1292,7 +1291,7 @@ splatt_kruskal *  StreamCPD::compute(
   _stream_mode = stream_mode;
   _rank = rank;
   _nmodes = num_modes;
-#if 1
+#if 0
   /* register constraints */
   for(idx_t m=0; m < num_modes; ++m) {
     if(m != stream_mode) {
@@ -1344,7 +1343,6 @@ splatt_kruskal *  StreamCPD::compute(
   csf_opts[SPLATT_OPTION_VERBOSITY] = SPLATT_VERBOSITY_NONE;
 #endif
 
-  // cpd_opts->tolerance = 5e-2;
   cpd_opts->max_inner_iterations = 25;
   cpd_opts->inner_tolerance = 7e-2;
   cpd_stats2(_rank, _source->num_modes(), cpd_opts, global_opts);
@@ -1363,7 +1361,7 @@ splatt_kruskal *  StreamCPD::compute(
   sp_timer_t sp_mttkrp;
   timer_reset(&rsp_mttkrp);
   timer_reset(&sp_mttkrp);
-  
+
   timer_reset(&stream_time);
   timer_reset(&t_admm);
   timer_reset(&t_mttkrp);
@@ -1383,66 +1381,72 @@ splatt_kruskal *  StreamCPD::compute(
     // grow matrices that are used for computation for each batch
     grow_mats(batch->dims);
     /* normalize factors on the first batch */
+    // for(idx_t m=0; m < num_modes; ++m) {
+    //   if(m == stream_mode) continue;
+    //   mat_normalize(_mat_ptrs[m], colnorms);
+    //   mat_aTa(_mat_ptrs[m], _cpd_ws->aTa[m]);
+    // }
+    // if (it == 0) {
+    //   #pragma omp simd
+    //   for (idx_t r = 0; r < rank; ++r) {
+    //     colnorms[r] = 1.0;
+    //   }
+    // }
     if(it == 0) {
       val_t * tmp = (val_t *) splatt_malloc(_rank * sizeof(*tmp));
       for(idx_t m=0; m < num_modes; ++m) {
         if(m == stream_mode) {
           continue;
         }
-        // tmp is for lambda for discarding for it==0?
         mat_normalize(_mat_ptrs[m], tmp);
-        // This was added later
-        mat_aTa(_mat_ptrs[m], _cpd_ws->aTa[m]);
-
       }
       splatt_free(tmp);
     }
 
 
-    /*
-      * compute new time slice.
-      */
-    timer_start(&t_mttkrp);
-
-    _mat_ptrs[SPLATT_MAX_NMODES]->I = 1;
-
-    // print_matrix("before mttkrp", _mttkrp_buf->mat());
-    mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
-    // print_matrix("after mttkrp", _mttkrp_buf->mat());
-
-    timer_stop(&t_mttkrp);
-
-    timer_start(&t_admm);
-    admm(_stream_mode, _mat_ptrs, colnorms, _cpd_ws, cpd_opts, global_opts);
-    timer_stop(&t_admm);
-    // print_matrix("after admm", _mat_ptrs[_stream_mode]);
-
-    // exit(1);
-    /* accumulate new time slice into temporal gram matrix */
-    val_t       * const restrict ata_vals = _cpd_ws->aTa[stream_mode]->vals;
-    val_t const * const restrict new_slice = _mat_ptrs[stream_mode]->vals;
-    p_copy_upper_tri(_cpd_ws->aTa[stream_mode]);
-    /* save old gram matrix */
-    par_memcpy(_old_gram->vals, ata_vals, rank * rank * sizeof(*ata_vals));
-
-    timer_start(&timers[TIMER_ATA]);
-#pragma omp parallel for schedule(static) if(rank > 50)
-    for(idx_t i=0; i < rank; ++i) {
-      for(idx_t j=0; j < rank; ++j) {
-        ata_vals[j + (i*rank)] += new_slice[i] * new_slice[j];
-      }
-    }
-    timer_stop(&timers[TIMER_ATA]);
-
-
-
     val_t prev_delta = 0.;
-#if SKIP_TEST
+#if SKIP_TEST == 1
     for(idx_t outer=0; outer < FIXED_NUM_IT; ++outer) {
 #else
     for(idx_t outer=0; outer < cpd_opts->max_iterations; ++outer) {
 #endif
       val_t delta = 0.;
+      /*
+      * compute new time slice.
+      */
+      timer_start(&t_mttkrp);
+
+      _mat_ptrs[SPLATT_MAX_NMODES]->I = 1;
+
+      // print_matrix("before mttkrp", _mttkrp_buf->mat());
+      mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
+      // print_matrix("after mttkrp", _mttkrp_buf->mat());
+
+      timer_stop(&t_mttkrp);
+
+      timer_start(&t_admm);
+      admm(_stream_mode, _mat_ptrs, colnorms, _cpd_ws, cpd_opts, global_opts);
+      timer_stop(&t_admm);
+      // print_matrix("after admm", _mat_ptrs[_stream_mode]);
+
+      // exit(1);
+      /* accumulate new time slice into temporal gram matrix */
+      val_t       * const restrict ata_vals = _cpd_ws->aTa[stream_mode]->vals;
+      val_t const * const restrict new_slice = _mat_ptrs[stream_mode]->vals;
+      p_copy_upper_tri(_cpd_ws->aTa[stream_mode]);
+      /* save old gram matrix */
+      par_memcpy(_old_gram->vals, ata_vals, rank * rank * sizeof(*ata_vals));
+
+      timer_start(&timers[TIMER_ATA]);
+  #pragma omp parallel for schedule(static) if(rank > 50)
+      for(idx_t i=0; i < rank; ++i) {
+        for(idx_t j=0; j < rank; ++j) {
+          ata_vals[j + (i*rank)] += new_slice[i] * new_slice[j];
+        }
+      }
+      timer_stop(&timers[TIMER_ATA]);
+
+
       /*
        * update the remaining modes
        */
@@ -1454,7 +1458,7 @@ splatt_kruskal *  StreamCPD::compute(
         /* mttkrp */
         _mat_ptrs[SPLATT_MAX_NMODES]->I = batch->dims[m];
 
-#ifdef non_init_version
+#if 0
         /* start non-init version */
         // matrix_t * _temp_mat = mat_alloc(batch->dims[m], rank);
 
@@ -1484,7 +1488,7 @@ splatt_kruskal *  StreamCPD::compute(
         /* reset dual matrix. todo: necessary? */
         memset(_cpd_ws->duals[m]->vals, 0,
             _cpd_ws->duals[m]->I * _rank * sizeof(val_t));
-        timer_start(&t_admm);     
+        timer_start(&t_admm);
         admm(m, _mat_ptrs, colnorms, _cpd_ws, cpd_opts, global_opts);
         timer_stop(&t_admm);
 
@@ -1499,10 +1503,9 @@ splatt_kruskal *  StreamCPD::compute(
 
       } /* foreach mode */
 
-      // printf("it: %d delta: %e prev_delta: %e (%e diff)\n", it, delta, prev_delta, fabs(delta - prev_delta));
+      printf("it: %d delta: %e prev_delta: %e (%e diff)\n", it, delta, prev_delta, fabs(delta - prev_delta));
 
       /* check convergence */
-      // cpd_opts->tolerance = 1e-3;
 #if SKIP_TEST == 1
 #else
       if(outer > 0 && fabs(delta - prev_delta) < cpd_opts->tolerance) {
@@ -1515,6 +1518,7 @@ splatt_kruskal *  StreamCPD::compute(
     } /* foreach outer max iterations */
 
     /* incorporate forgetting factor */
+    // printf("forget: %f\n", forget);
     for(idx_t x=0; x < _rank * _rank; ++x) {
       _cpd_ws->aTa[_stream_mode]->vals[x] *= forget;
     }
@@ -1541,17 +1545,17 @@ splatt_kruskal *  StreamCPD::compute(
     timer_stop(&stream_time);
     ++it;
 
-    /*
+
        double local_err   = compute_errorsq(1);
        double global_err  = -1.;
        double local10_err = -1.;
        double cpd_err     = -1.;
-       if((it > 0) && ((it % check_err_interval == 0) || _source->last_batch())) {
+      if((it > 0) && ((it % CHECK_ERR_INTERVAL == 0) || _source->last_batch())) {
        global_err  = compute_errorsq(it);
-       local10_err = compute_errorsq(10);
+       // local10_err = compute_errorsq(10);
        cpd_err     = compute_cpd_errorsq(it);
        if(isnan(cpd_err)) {
-       cpd_err = -1.;
+        cpd_err = -1.;
        }
        }
 
@@ -1560,7 +1564,8 @@ splatt_kruskal *  StreamCPD::compute(
        it, batch->nnz, batch_time.seconds,
        (double) batch->nnz / batch_time.seconds,
        cpd_err, global_err, local_err, local10_err);
-       */
+
+    // if (it > 500) break;
 
     /* prepare for next batch */
     tt_free(batch);
@@ -1587,6 +1592,7 @@ splatt_kruskal *  StreamCPD::compute(
 
   /* compute quality assessment */
   splatt_kruskal * cpd = get_kruskal();
+  // memcpy(cpd->lambda, colnorms, rank * sizeof(val_t));
   double const final_err = cpd_error(_source->full_stream(), cpd);
   printf("\n");
   printf("final-err: %0.5f\n",  final_err * final_err);
