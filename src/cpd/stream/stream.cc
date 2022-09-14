@@ -72,7 +72,7 @@ splatt_error_type splatt_cpd_stream(
   }
   
   /* write output */
-#if 0
+#if 1
   for(idx_t m=0; m < factored->nmodes; ++m) {
     char * matfname = (char *) splatt_malloc(512 * sizeof(*matfname));
     sprintf(matfname, "mode%" SPLATT_PF_IDX ".mat", m+1);

@@ -29,15 +29,13 @@ extern "C" {
 
 
 /* How often to check global factorization error. This is expensive! */
-#ifndef CHECK_ERR_INTERVAL
-#define CHECK_ERR_INTERVAL 10
-#endif
+// #define CHECK_ERR_INTERVAL 10
 
 // #define DEBUG 1
 #define USE_RSP_MTTKRP
 
-// #define SKIP_TEST 1
-// #define FIXED_NUM_IT 20
+#define SKIP_TEST 1
+#define FIXED_NUM_IT 20
 
 // Row-sparse mttkrp implementation
 #include "../../stmttkrp.hpp"
@@ -698,6 +696,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
           continue;
         }
         mat_normalize(_mat_ptrs[m], tmp);
+        mat_aTa(_mat_ptrs[m], _cpd_ws->aTa[m]);
       }
       splatt_free(tmp);
     }
@@ -1163,6 +1162,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     ++it;
 
 
+#ifdef CHECK_ERR_INTERVAL
     double local_err   = compute_errorsq(1);
     double global_err  = -1.;
     double local10_err = -1.;
@@ -1181,7 +1181,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         it, batch->nnz, 1.0,
         (double) batch->nnz / 1.0,
         cpd_err, global_err, local_err, local10_err);
-
+#else
+#endif
     // if (it > 500) break;
 
 
@@ -1399,6 +1400,7 @@ splatt_kruskal *  StreamCPD::compute(
           continue;
         }
         mat_normalize(_mat_ptrs[m], tmp);
+        mat_aTa(_mat_ptrs[m], _cpd_ws->aTa[m]);
       }
       splatt_free(tmp);
     }
@@ -1545,26 +1547,28 @@ splatt_kruskal *  StreamCPD::compute(
     timer_stop(&stream_time);
     ++it;
 
+#ifdef CHECK_ERR_INTERVAL
 
-       double local_err   = compute_errorsq(1);
-       double global_err  = -1.;
-       double local10_err = -1.;
-       double cpd_err     = -1.;
-      if((it > 0) && ((it % CHECK_ERR_INTERVAL == 0) || _source->last_batch())) {
-       global_err  = compute_errorsq(it);
-       // local10_err = compute_errorsq(10);
-       cpd_err     = compute_cpd_errorsq(it);
-       if(isnan(cpd_err)) {
-        cpd_err = -1.;
+    double local_err   = compute_errorsq(1);
+    double global_err  = -1.;
+    double local10_err = -1.;
+    double cpd_err     = -1.;
+    if((it > 0) && ((it % CHECK_ERR_INTERVAL == 0) || _source->last_batch())) {
+      global_err  = compute_errorsq(it);
+      // local10_err = compute_errorsq(10);
+      cpd_err     = compute_cpd_errorsq(it);
+      if(isnan(cpd_err)) {
+          cpd_err = -1.;
        }
-       }
+    }
 
-       printf("batch %5lu: %7lu nnz (%0.5fs) (%0.3e nnz/s) "
-       "cpd: %+0.5f global: %+0.5f local-1: %+0.5f local-10: %+0.5f\n",
-       it, batch->nnz, batch_time.seconds,
-       (double) batch->nnz / batch_time.seconds,
-       cpd_err, global_err, local_err, local10_err);
-
+    printf("batch %5lu: %7lu nnz (%0.5fs) (%0.3e nnz/s) "
+    "cpd: %+0.5f global: %+0.5f local-1: %+0.5f local-10: %+0.5f\n",
+    it, batch->nnz, batch_time.seconds,
+    (double) batch->nnz / batch_time.seconds,
+    cpd_err, global_err, local_err, local10_err);
+#else
+#endif
     // if (it > 500) break;
 
     /* prepare for next batch */
