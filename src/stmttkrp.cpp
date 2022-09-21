@@ -362,14 +362,9 @@ void idxsort_hist(const sptensor_t * const tt, const idx_t mode, std::vector<siz
   }
 
   t.new_section("idxsort: parsort idx");
-#if __INTEL_COMPILER
-  std::sort(std::execution::par, idx.begin(), idx.end(), [&](size_t x, size_t y) {
-      return (tt->ind[mode][x] < tt->ind[mode][y]);});
-#else
-  // TODO: parallel sorting for non-intel
+
   std::sort(idx.begin(), idx.end(), [&](size_t x, size_t y) {
       return (tt->ind[mode][x] < tt->ind[mode][y]);});
-#endif
 
   t.new_section("find num unique");
   idx_t* hists;
