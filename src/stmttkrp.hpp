@@ -100,6 +100,13 @@ rsp_matrix_t* rsp_mttkrp_stream_rsp(
     std::vector<std::vector<int>>& ridx, 
     std::vector<size_t>& buckets);
 
+void rsp_mttkrp_stream_rsp_streaming_mode(
+    sptensor_t * const tt, rsp_matrix_t ** rsp_mats, const idx_t mode, 
+    const idx_t stream_mode,
+    std::vector<size_t>& idx, 
+    std::vector<std::vector<int>>& ridx, 
+    std::vector<size_t>& buckets);
+
 rsp_matrix_t* rsp_mttkrp_stream_with_idx(
     sptensor_t * const tt, matrix_t ** mats, const idx_t mode, 
     std::vector<size_t>& idx, std::vector<size_t>& buckets);

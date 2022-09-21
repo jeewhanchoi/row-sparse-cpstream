@@ -125,6 +125,8 @@ void mat_solve_cholesky_with_fallback(
     if (is_spd) {
       // Run DPOTRS
       /* Solve against rhs */
+      // printf("hellon\n");
+      // exit(1);
       LAPACK_DPOTRS(&tri, &N, &nrhs, A->vals, &lda, rhs->vals, &ldb, &info);
       if(info) {
         // When solve fails, there's no fallback for this case
@@ -217,7 +219,7 @@ bool mat_cholesky_(
   
   LAPACK_DPOTRF(&uplo, &order, neqs, &lda, &info);
   if(info) {
-    fprintf(stderr, "SPLATT: DPOTRF returned %d\n", info);
+    // fprintf(stderr, "SPLATT: DPOTRF returned %d\n", info);
     // Revert back to originial A
     memcpy(neqs, A_vals_cpy, A->I * A->J * sizeof(val_t));
     return false;
