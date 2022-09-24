@@ -227,13 +227,13 @@ static void p_constraint_closedform(
     con->clsd_func(primal->vals, nrows, ncols, con->data);
   }
 
-  bool is_spd = mat_cholesky_(ws->gram);
+  mat_cholesky(ws->gram);
 
   /* Copy and then solve directly against MTTKRP */
   size_t const bytes = primal->I * primal->J * sizeof(*primal->vals);
   par_memcpy(primal->vals, ws->mttkrp_buf->vals, bytes);
   // mat_solve_cholesky(ws->gram, primal);
-  mat_solve_cholesky_with_fallback(ws->gram, primal, is_spd);
+  mat_solve_cholesky(ws->gram, primal);
 
 }
 
