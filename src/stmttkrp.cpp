@@ -838,7 +838,6 @@ void rsp_mttkrp_stream_rsp_streaming_mode(
     val_t * restrict row_accum = (val_t*)splatt_malloc(nfactors * sizeof(val_t));
 
     /* stream through buckets of nnz */
-    #pragma omp for schedule(static,1)
     for(idx_t hi = 0; hi < num_bins; ++hi) {
       idx_t start = hi == 0 ? 0 : hist[hi-1];
       idx_t end = hist[hi];
@@ -847,6 +846,7 @@ void rsp_mttkrp_stream_rsp_streaming_mode(
       memset(row_accum, 0, nfactors*sizeof(val_t));
 
       idx_t oidx = hi;
+      #pragma omp for schedule(static,1)
       for (idx_t i = start; i < end; ++i) {
         /* initialize with value */
         for(idx_t f=0; f < nfactors; ++f) {
@@ -867,6 +867,7 @@ void rsp_mttkrp_stream_rsp_streaming_mode(
             m_idx = ridx[m][tt->ind[m][idx[i]]];
           }
 
+
           val_t const * const restrict inrow = mvals[m] + (m_idx * nfactors);
           for(idx_t f=0; f < nfactors; ++f) {
             accum[f] *= inrow[f];
@@ -880,7 +881,8 @@ void rsp_mttkrp_stream_rsp_streaming_mode(
 
       val_t * const restrict outrow = outmat + (oidx * nfactors);
       for (idx_t f = 0; f < nfactors; ++f) {
-        outrow[f] = row_accum[f];
+        #pragma omp atomic update
+        outrow[f] += row_accum[f];
       }
     }
 
