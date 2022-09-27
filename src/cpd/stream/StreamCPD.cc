@@ -35,12 +35,12 @@ extern "C" {
 #define USE_RSP_MTTKRP
 
 #define SKIP_TEST 1
-#define FIXED_NUM_IT 20
+#define FIXED_NUM_IT 2
 
 // Row-sparse mttkrp implementation
 #include "../../stmttkrp.hpp"
 
-#define DOTIME 0
+#define DOTIME 1
 
 static void p_copy_upper_tri(
     matrix_t * const M)
@@ -608,6 +608,13 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
   // Added to measure difference between sp and rsp mttkrp
   sp_timer_t rsp_mttkrp;
   sp_timer_t sp_mttkrp;
+
+  double t_tensor = 0.0;
+  double wtime_tensor = 0.0;
+
+  double t_iter = 0.0;
+  double wtime_iter = 0.0;
+
   timer_reset(&rsp_mttkrp);
   timer_reset(&sp_mttkrp);
 
@@ -674,6 +681,8 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
      * idx, buckets: used for rsp_mttkrp
      * nz_rows: corresponding non-zeros rows in factor matrix
      */
+    wtime_iter = omp_get_wtime();
+
     std::vector<std::vector<size_t>> nz_rows((size_t)num_modes,
                                              std::vector<size_t> (0, 0));
     std::vector<std::vector<size_t>> buckets((size_t)num_modes,
@@ -809,9 +818,11 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
     // mttkrp_stream_wo_lock(batch, _mat_ptrs, stream_mode);
     // mttkrp_stream(batch, _mat_ptrs, stream_mode);
     // A_nz[_stream_mode] = rsp_mttkrp_stream_rsp(batch, A_nz)
+    wtime_tensor = omp_get_wtime();
     rsp_mttkrp_stream_rsp_streaming_mode(batch, A_nz, stream_mode,
                           stream_mode, idx[stream_mode],
                           ridx, buckets[stream_mode]);
+    t_tensor += omp_get_wtime() - wtime_tensor;
 
     #if 1
     timer_stop(&t_mttkrp);
@@ -908,10 +919,12 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
         #if 1
         timer_start(&t_mttkrp);
         #endif
+        wtime_tensor = omp_get_wtime();
         // Provide rsp_mttkrp with additional parameters: ridx, stream_mode
         rsp_matrix_t * rsp_mat = rsp_mttkrp_stream_rsp(batch, A_nz, m,
                                                        stream_mode, idx[m],
                                                        ridx, buckets[m]);
+        t_tensor += omp_get_wtime() - wtime_tensor;
         #if 1
         timer_stop(&t_mttkrp);
         #endif
@@ -1026,7 +1039,7 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
 
       } /* foreach mode */
 
-      printf("it: %d delta: %e prev_delta: %e (%e diff)\n", it, _delta, _prev_delta, fabs(_delta - _prev_delta));
+      // printf("it: %d delta: %e prev_delta: %e (%e diff)\n", it, _delta, _prev_delta, fabs(_delta - _prev_delta));
 
       _niter = outer + 1;
       // timer_stop(&t_four);
@@ -1127,6 +1140,9 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
       }
       rspmat_free(A_nz_prev[m]);
     }
+
+    t_iter += omp_get_wtime() - wtime_iter;
+
     // timer_stop(&t_clean);
 
     // timer_start(&t_final_copy);
@@ -1217,38 +1233,40 @@ splatt_kruskal *  StreamCPD::compute_rowsparse(
   printf("--tfour--time: %0.3f s\n", t_four.seconds);
    */
 
-  // printf("--unknown--time: %0.3f s\n", t_unknown.seconds);
-  // printf("--clean-time: %0.3f s\n", t_clean.seconds);
-  // printf("--forget-time: %0.3f s\n", t_forget.seconds);
-  // printf("--fnlcpy-time: %0.3f s\n", t_final_copy.seconds);
+  printf("--unknown--time: %0.3f s\n", t_unknown.seconds);
+  printf("--clean-time: %0.3f s\n", t_clean.seconds);
+  printf("--forget-time: %0.3f s\n", t_forget.seconds);
+  printf("--fnlcpy-time: %0.3f s\n", t_final_copy.seconds);
   printf("--pre-time: %0.3f s\n", t_pre.seconds);
   printf("--inner-time: %0.3f s\n", t_inner.seconds);
   printf("--post--time: %0.3f s\n", t_post.seconds);
-  // printf("--full-time: %0.3f s\n", t_full.seconds);
-  // printf("--ch-time: %0.3f s\n", t_ch.seconds);
-  // printf("--qinv-time: %0.3f s\n", t_q_inv.seconds);
-  // printf("--update-time: %0.3f s\n", t_chol.seconds);
+  printf("--full-time: %0.3f s\n", t_full.seconds);
+  printf("--ch-time: %0.3f s\n", t_ch.seconds);
+  printf("--qinv-time: %0.3f s\n", t_q_inv.seconds);
+  printf("--update-time: %0.3f s\n", t_chol.seconds);
   printf("--update-time: %0.3f s\n", t_update.seconds);
-  // printf("--gram-time: %0.3f s\n", t_gram.seconds);
-  // printf("--copy-time: %0.3f s\n", t_copy.seconds);
-  // printf("--first-time: %0.3f s\n", t_first.seconds);
-  // printf("--vec-time: %0.3f s\n", t_vec.seconds);
-  // printf("--pre-time: %0.3f s\n", t_pre.seconds);
-  // printf("--set-time: %0.3f s\n", t_set.seconds);
-  // printf("--Q-time: %0.3f s\n", t_Q.seconds);
-  // printf("--admm-time: %0.3f s\n", t_admm.seconds);
+  printf("--gram-time: %0.3f s\n", t_gram.seconds);
+  printf("--copy-time: %0.3f s\n", t_copy.seconds);
+  printf("--first-time: %0.3f s\n", t_first.seconds);
+  printf("--vec-time: %0.3f s\n", t_vec.seconds);
+  printf("--pre-time: %0.3f s\n", t_pre.seconds);
+  printf("--set-time: %0.3f s\n", t_set.seconds);
+  printf("--Q-time: %0.3f s\n", t_Q.seconds);
+  printf("--admm-time: %0.3f s\n", t_admm.seconds);
   printf("--mttkrp-time: %0.3f s\n", t_mttkrp.seconds);
-  // printf("--mataTa-time: %0.3f s\n", t_mataTa.seconds);
+  printf("--mataTa-time: %0.3f s\n", t_mataTa.seconds);
   printf("--historical-time: %0.3f s\n", t_hist.seconds);
   printf("--cpderr-time: %0.3f s\n", t_cpderr.seconds);
   printf("--stream-time: %0.3f s\n", stream_time.seconds);
   printf("--final-err: %0.5f\n",  1.0);
-  //double accum = t_admm.seconds + t_mttkrp.seconds + t_mataTa.seconds + t_hist.seconds + t_cpderr.seconds + t_pre.seconds + t_set.seconds + t_Q.seconds + t_vec.seconds + t_first.seconds + t_copy.seconds + t_gram.seconds + t_update.seconds + t_q_inv.seconds + t_ch.seconds + t_full.seconds + t_final_copy.seconds + t_forget.seconds + t_clean.seconds + t_unknown.seconds + t_chol.seconds;
-  double accum = t_pre.seconds + t_inner.seconds + t_post.seconds;
-  printf("--Misc: %0.3f s\n", stream_time.seconds - accum);
+  double accum = t_admm.seconds + t_mttkrp.seconds + t_mataTa.seconds + t_hist.seconds + t_cpderr.seconds + t_pre.seconds + t_set.seconds + t_Q.seconds + t_vec.seconds + t_first.seconds + t_copy.seconds + t_gram.seconds + t_update.seconds + t_q_inv.seconds + t_ch.seconds + t_full.seconds + t_final_copy.seconds + t_forget.seconds + t_clean.seconds + t_unknown.seconds + t_chol.seconds;
+  // double accum = t_pre.seconds + t_inner.seconds + t_post.seconds;
+  // printf("--Misc: %0.3f s\n", stream_time.seconds - accum);
   printf("--Total: %0.3f s\n", accum);
-  printf("--outer: %lu\n", niter);
-  printf("--Batches: %lu\n", it);
+  printf("--t_iter: %f\n", t_iter);
+  printf("--t_tensor: %f\n", t_tensor);
+  // printf("--outer: %lu\n", niter);
+  // printf("--Batches: %lu\n", it);
 
   /* compute quality assessment */
   splatt_kruskal * cpd = get_kruskal();

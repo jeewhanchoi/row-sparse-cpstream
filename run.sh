@@ -3,6 +3,9 @@
 module load intel/19
 source /packages/intel/19/linux/pkg_bin/compilervars.sh -arch intel64 -platform linux
 
+export OMP_NUM_THREADS=28
+export KMP_AFFINITY=granularity=fine,compact,1
+
 function special_execute() { 
     [ "$1" -eq "-123" ] && echo "flagY" || echo "flagN"; 
     shift; 
@@ -56,11 +59,9 @@ function get_rsp() {
     [[ -z "$1" ]] && echo "" || echo "--use_rsp=True"
 }
 
-cmd="./build/Linux-x86_64/bin/splatt cpd -v --tol 5e-2 -r 16 --seed 23 --stream=$(get_streaming_mode $1) -t 56 $(get_rsp $2) $(get_reg $1) $(get_path_to_tensor $1)"
-make && echo $cmd && eval "$cmd"
+make
 
-cmd="./build/Linux-x86_64/bin/splatt cpd -v --tol 5e-2 -r 16 --seed 33 --stream=$(get_streaming_mode $1) -t 56 $(get_rsp $2) $(get_reg $1) $(get_path_to_tensor $1)"
-make && echo $cmd && eval "$cmd"
-
-cmd="./build/Linux-x86_64/bin/splatt cpd -v --tol 5e-2 -r 16 --seed 45 --stream=$(get_streaming_mode $1) -t 56 $(get_rsp $2) $(get_reg $1) $(get_path_to_tensor $1)"
-make && echo $cmd && eval "$cmd"
+for run in {1..10}; do
+    cmd="./build/Linux-x86_64/bin/splatt cpd -v --tol 5e-2 -r 16 --seed 23 --stream=$(get_streaming_mode $1) -t 28 $(get_rsp $2) $(get_reg $1) $(get_path_to_tensor $1)"
+    echo $cmd && eval "$cmd"
+done
